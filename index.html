@@ -219,6 +219,63 @@
     padding: 14px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; width:100%;
   }
 
+  /* ---------- LESSON (teacher) ---------- */
+  .lesson-head{
+    display:flex; align-items:center; gap:10px; margin-bottom: 16px;
+  }
+  .teacher-seal{
+    flex-shrink:0;
+    width:40px; height:40px; border-radius:50%;
+    background: var(--red);
+    color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1.5px var(--red);
+  }
+  .lesson-head .teacher-name{ font-size:14px; font-weight:700; }
+  .lesson-head .lesson-title{ font-size:12px; color:var(--ink-soft); }
+
+  .speech-bubble{
+    background: var(--card);
+    border:1px solid var(--line);
+    border-left: 3px solid var(--red);
+    border-radius: var(--radius);
+    padding: 16px 16px;
+    margin-bottom: 14px;
+    font-size:14px;
+    line-height:1.8;
+  }
+  .speech-bubble .worked-expr{
+    font-family:'Space Grotesk', monospace;
+    font-size:19px;
+    font-weight:600;
+    margin-top:8px;
+    color: var(--navy);
+  }
+  .lesson-trace-prompt{
+    font-family:'Space Grotesk', monospace;
+    font-size:22px;
+    font-weight:600;
+    text-align:center;
+    margin-bottom: 6px;
+  }
+  .lesson-trace-expr{
+    font-family:'Space Grotesk', monospace;
+    font-size:16px;
+    text-align:center;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .hint-toggle{
+    background:none; border:none; color: var(--navy); font-family:inherit;
+    font-size:12.5px; cursor:pointer; padding:0 0 12px; text-decoration:underline;
+  }
+  .hint-box{
+    background: var(--card); border:1px dashed var(--line); border-radius: var(--radius);
+    padding: 10px 12px; font-size:13px; color: var(--ink-soft); margin-bottom:14px;
+  }
+
   /* ---------- RESULT ---------- */
   .result-tier{
     font-size: 22px; font-weight:700; margin-bottom: 6px;
@@ -380,6 +437,68 @@
   function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
   function choice(arr){ return arr[randInt(0,arr.length-1)]; }
 
+  const TEACHER_NAME = '凛先生';
+
+  /* ---- number-transformation technique detection (LEVEL4 数の構造・変形) ---- */
+  const SPECIAL_MUL = {
+    5:   {factor:10,   apply:(step,other)=>step/2,      formula:(o)=>`${o} × 10 ÷ 2`},
+    9:   {factor:10,   apply:(step,other)=>step-other,  formula:(o)=>`${o} × 10 − ${o}`},
+    11:  {factor:10,   apply:(step,other)=>step+other,  formula:(o)=>`${o} × 10 + ${o}`},
+    25:  {factor:100,  apply:(step)=>step/4,            formula:(o)=>`${o} × 100 ÷ 4`},
+    50:  {factor:100,  apply:(step)=>step/2,            formula:(o)=>`${o} × 100 ÷ 2`},
+    99:  {factor:100,  apply:(step,other)=>step-other,  formula:(o)=>`${o} × 100 − ${o}`},
+    125: {factor:1000, apply:(step)=>step/8,            formula:(o)=>`${o} × 1000 ÷ 8`}
+  };
+  function nearRound(x){
+    if(x>=100){
+      const base100 = Math.round(x/100)*100;
+      const diff100 = x-base100;
+      if(diff100!==0 && Math.abs(diff100)<=4 && base100>0) return {base:base100, diff:diff100};
+    }
+    const base10 = Math.round(x/10)*10;
+    const diff10 = x-base10;
+    if(diff10!==0 && Math.abs(diff10)<=2 && base10>0) return {base:base10, diff:diff10};
+    return null;
+  }
+  function techniqueForAddSub(a,b,opType){
+    if(opType==='add'){
+      const na = nearRound(a), nb = nearRound(b);
+      const n = na || nb;
+      if(!n) return null;
+      const other = na ? b : a;
+      const sign = n.diff>0 ? '+' : '−';
+      return {key:'add-complement', base:n.base, diff:n.diff, absDiff:Math.abs(n.diff), sign, other};
+    } else {
+      const nb = nearRound(b);
+      if(!nb) return null;
+      const sign = nb.diff>0 ? '−' : '+';
+      return {key:'sub-complement', base:nb.base, diff:nb.diff, absDiff:Math.abs(nb.diff), sign, a};
+    }
+  }
+  function techniqueForMul(a,b){
+    for(const cand of [a,b]){
+      if(SPECIAL_MUL[cand]){
+        const other = cand===a ? b : a;
+        return {key:'mul-x'+cand, special:cand, other, cfg:SPECIAL_MUL[cand]};
+      }
+    }
+    return null;
+  }
+  function hintTextFor(p){
+    if(!p.technique) return '';
+    const t = p.technique;
+    if(p.type==='add'){
+      return `${t.base} ${t.sign} ${t.absDiff} + ${t.other} と考えると計算しやすい`;
+    }
+    if(p.type==='sub'){
+      return `${t.a} − ${t.base} を計算してから、${t.sign} ${t.absDiff} すると計算しやすい`;
+    }
+    if(p.type==='mul'){
+      return `${t.cfg.formula(t.other)} と考えると計算しやすい`;
+    }
+    return '';
+  }
+
   /* ================= app state ================= */
   const S = {
     meta: null,           // {totalProblems, totalCorrect, totalTimeMs, firstDate}
@@ -418,7 +537,7 @@
     else if(level===4){ a=randInt(100,999); b=randInt(10,99); }
     else { a=randInt(100,999); b=randInt(100,999); }
     const correct=a+b;
-    return mkNumeric('add', level, `${a} + ${b}`, correct, Math.max(1, Math.round(correct*0.02)));
+    return mkNumeric('add', level, `${a} + ${b}`, correct, Math.max(1, Math.round(correct*0.02)), techniqueForAddSub(a,b,'add'));
   }
   function genSub(level){
     let a,b;
@@ -428,7 +547,7 @@
     else if(level===4){ a=randInt(100,999); b=randInt(10,99); }
     else { a=randInt(100,999); b=randInt(100,999); if(b>a){ const t=a; a=b; b=t; } }
     const correct=a-b;
-    return mkNumeric('sub', level, `${a} − ${b}`, correct, Math.max(1, Math.round(correct*0.02)));
+    return mkNumeric('sub', level, `${a} − ${b}`, correct, Math.max(1, Math.round(correct*0.02)), techniqueForAddSub(a,b,'sub'));
   }
   function genMul(level){
     let a,b;
@@ -438,7 +557,7 @@
     else if(level===4){ a=randInt(100,999); b=randInt(1,9); }
     else { a=randInt(100,999); b=randInt(10,99); }
     const correct=a*b;
-    return mkNumeric('mul', level, `${a} × ${b}`, correct, Math.max(1, Math.round(correct*0.03)));
+    return mkNumeric('mul', level, `${a} × ${b}`, correct, Math.max(1, Math.round(correct*0.03)), techniqueForMul(a,b));
   }
   function genDiv(level){
     let divisor, dividend;
@@ -547,11 +666,12 @@
       }
     };
   }
-  function mkNumeric(type, level, promptText, correct, tolerance){
+  function mkNumeric(type, level, promptText, correct, tolerance, technique){
     return {
       type, level,
       prompt: promptText,
       promptSub: '',
+      technique: technique || null,
       fields: [{key:'ans', label:'答え'}],
       evaluate: (v)=>{
         const u = Number(v.ans);
@@ -563,6 +683,149 @@
     };
   }
   const GENERATORS = {add:genAdd, sub:genSub, mul:genMul, div:genDiv, est:genEst, qty:genQty, biz:genBiz};
+
+  /* ================= lessons (講義 → なぞる) ================= */
+  const LESSON_TITLE = {
+    'add-complement': '足し算のコツ：区切りのよい数にする',
+    'sub-complement': '引き算のコツ：区切りのよい数から引く',
+    'mul-x5': 'かけ算のコツ：5倍は「10倍して半分」',
+    'mul-x9': 'かけ算のコツ：9倍は「10倍して1回分引く」',
+    'mul-x11': 'かけ算のコツ：11倍は「10倍して1回分足す」',
+    'mul-x25': 'かけ算のコツ：25倍は「100倍して4で割る」',
+    'mul-x50': 'かけ算のコツ：50倍は「100倍して2で割る」',
+    'mul-x99': 'かけ算のコツ：99倍は「100倍して1回分引く」',
+    'mul-x125': 'かけ算のコツ：125倍は「1000倍して8で割る」'
+  };
+  const FIXED_EXAMPLES = {
+    'add-complement': {type:'add', a:98, b:37},
+    'sub-complement': {type:'sub', a:152, b:98},
+    'mul-x5':   {type:'mul', a:46, b:5},
+    'mul-x9':   {type:'mul', a:23, b:9},
+    'mul-x11':  {type:'mul', a:34, b:11},
+    'mul-x25':  {type:'mul', a:48, b:25},
+    'mul-x50':  {type:'mul', a:18, b:50},
+    'mul-x99':  {type:'mul', a:27, b:99},
+    'mul-x125': {type:'mul', a:32, b:125}
+  };
+  function techniqueFor(type,a,b){
+    return type==='mul' ? techniqueForMul(a,b) : techniqueForAddSub(a,b,type);
+  }
+  function makeExample(type,a,b){
+    return {type, a, b, correct: type==='add'? a+b : (type==='sub'? a-b : a*b), technique: techniqueFor(type,a,b)};
+  }
+  function buildTraceExample(key){
+    if(key==='add-complement'){
+      const base = choice([50,60,70,80,90,100,200,300]);
+      const diff = choice([-3,-2,-1,1,2,3]);
+      const b = randInt(10,80);
+      return makeExample('add', base+diff, b);
+    }
+    if(key==='sub-complement'){
+      const base = choice([50,60,70,80,90,100,200]);
+      const diff = choice([-3,-2,-1,1,2,3]);
+      const b = base+diff;
+      const a = b + randInt(15,80);
+      return makeExample('sub', a, b);
+    }
+    const special = Number(key.replace('mul-x',''));
+    const other = randInt(11, special===125 ? 40 : 88);
+    return makeExample('mul', other, special);
+  }
+  function workedExpr(ex){
+    const t = ex.technique;
+    if(ex.type==='add') return `${t.base} ${t.sign} ${t.absDiff} + ${t.other} = ${ex.correct}`;
+    if(ex.type==='sub') return `${t.a} − ${t.base} = ${t.a-t.base}　→　${t.a-t.base} ${t.sign} ${t.absDiff} = ${ex.correct}`;
+    return `${t.cfg.formula(t.other)} = ${ex.correct}`;
+  }
+
+  async function seenTechniques(){
+    return (await stGet('seenTechniques')) || [];
+  }
+  async function markTechniqueSeen(key){
+    const list = await seenTechniques();
+    if(!list.includes(key)){ list.push(key); await stSet('seenTechniques', list); }
+  }
+
+  function renderLessonExplain(key, onNext){
+    const ex = FIXED_EXAMPLES[key];
+    const filled = makeExample(ex.type, ex.a, ex.b);
+    const opSym = ex.type==='add' ? '+' : (ex.type==='sub' ? '−' : '×');
+    document.getElementById('prompt-area').innerHTML = `
+      <div class="lesson-head">
+        <div class="teacher-seal">凛</div>
+        <div>
+          <div class="teacher-name">${TEACHER_NAME}</div>
+          <div class="lesson-title">${LESSON_TITLE[key]}</div>
+        </div>
+      </div>
+      <div class="speech-bubble">
+        ${ex.a} ${opSym} ${ex.b} を見てみましょう。${hintTextFor(filled)}。<br>
+        実際に計算すると、こうなります。
+        <div class="worked-expr">${workedExpr(filled)}</div>
+      </div>`;
+    document.getElementById('input-area').innerHTML = `
+      <button class="btn-next" id="btn-lesson-next">なぞってみる</button>`;
+    document.getElementById('feedback-area').innerHTML = '';
+    document.getElementById('btn-lesson-next').addEventListener('click', onNext);
+  }
+
+  function renderLessonTrace(key, onDone){
+    const ex = buildTraceExample(key);
+    const t = ex.technique;
+    const opSym = ex.type==='add' ? '+' : (ex.type==='sub' ? '−' : '×');
+
+    let template, fields, evaluate;
+    if(ex.type==='add'){
+      template = `${t.base} ${t.sign} ▢ + ${t.other} = ▢`;
+      fields = [{key:'adj', label:'調整する数'}, {key:'ans', label:'答え'}];
+      evaluate = (v)=> Number(v.adj)===t.absDiff && Number(v.ans)===ex.correct;
+    } else if(ex.type==='sub'){
+      template = `${t.a} − ${t.base} = ${t.a-t.base}　→　${t.a-t.base} ${t.sign} ▢ = ▢`;
+      fields = [{key:'adj', label:'調整する数'}, {key:'ans', label:'答え'}];
+      evaluate = (v)=> Number(v.adj)===t.absDiff && Number(v.ans)===ex.correct;
+    } else {
+      template = `${t.cfg.formula(t.other)} = ▢`;
+      fields = [{key:'ans', label:'答え'}];
+      evaluate = (v)=> Number(v.ans)===ex.correct;
+    }
+
+    document.getElementById('prompt-area').innerHTML = `
+      <div class="lesson-head">
+        <div class="teacher-seal">凛</div>
+        <div>
+          <div class="teacher-name">${TEACHER_NAME}</div>
+          <div class="lesson-title">同じやり方で、なぞってみましょう</div>
+        </div>
+      </div>
+      <div class="lesson-trace-prompt">${ex.a} ${opSym} ${ex.b}</div>
+      <div class="lesson-trace-expr">${template}</div>`;
+    document.getElementById('input-area').innerHTML = `
+      <div class="field-row">
+        ${fields.map(f=>`
+          <div class="field-group">
+            <label>${f.label}</label>
+            <input type="number" inputmode="numeric" data-key="${f.key}" autocomplete="off">
+          </div>`).join('')}
+      </div>
+      <div class="answer-actions">
+        <button class="btn-submit" id="btn-trace-submit">確認する</button>
+      </div>`;
+    document.getElementById('feedback-area').innerHTML = '';
+
+    document.getElementById('btn-trace-submit').addEventListener('click', ()=>{
+      const v = {};
+      document.querySelectorAll('#input-area input').forEach(inp=>{ v[inp.dataset.key]=inp.value; });
+      const ok = evaluate(v);
+      document.getElementById('input-area').innerHTML = '';
+      document.getElementById('feedback-area').innerHTML = `
+        <div class="feedback-card ${ok?'ok':'near'}">
+          <div class="fb-title">${ok ? 'その通りです' : '確認しましょう'}</div>
+          <div class="fb-body">${workedExpr(ex)}</div>
+        </div>
+        <button class="btn-next" id="btn-trace-done">この問題に進む</button>`;
+      document.getElementById('btn-trace-done').addEventListener('click', onDone);
+    });
+  }
 
   function buildSessionQueue(){
     const weights = TYPES.map(t=>{
@@ -642,12 +905,20 @@
   /* ================= session flow ================= */
   let sessionTimerHandle = null;
 
-  function startSession(){
+  async function startSession(){
+    const queue = buildSessionQueue();
+    const seen = await seenTechniques();
+    let lessonIdx = -1, lessonKey = null;
+    for(let i=0;i<queue.length;i++){
+      const k = queue[i].technique && queue[i].technique.key;
+      if(k && !seen.includes(k)){ lessonIdx = i; lessonKey = k; break; }
+    }
     S.session = {
-      queue: buildSessionQueue(),
+      queue,
       idx: 0,
       results: [],
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      lessonIdx, lessonKey, lessonDone: false
     };
     showScreen('session');
     startTimer();
@@ -667,6 +938,24 @@
   }
 
   function renderProblem(){
+    if(S.session.idx === S.session.lessonIdx && !S.session.lessonDone){
+      const key = S.session.lessonKey;
+      document.getElementById('session-progress-text').textContent = `講義`;
+      document.getElementById('session-progress-bar').style.width = `${Math.round((S.session.idx)/S.session.queue.length*100)}%`;
+      document.getElementById('problem-type-label').textContent = '';
+      renderLessonExplain(key, ()=>{
+        renderLessonTrace(key, async ()=>{
+          S.session.lessonDone = true;
+          await markTechniqueSeen(key);
+          renderProblem();
+        });
+      });
+      return;
+    }
+    renderProblemCore();
+  }
+
+  function renderProblemCore(){
     const q = S.session.queue[S.session.idx];
     document.getElementById('session-progress-text').textContent = `${S.session.idx+1} / ${S.session.queue.length}`;
     document.getElementById('session-progress-bar').style.width = `${Math.round((S.session.idx)/S.session.queue.length*100)}%`;
@@ -702,7 +991,9 @@
   }
 
   function renderInputForm(q, container){
+    const hint = q.technique ? hintTextFor(q) : '';
     container.innerHTML = `
+      ${hint ? `<button class="hint-toggle" id="btn-hint">💡 ヒントを見る</button><div class="hint-box" id="hint-box" style="display:none;">${hint}</div>` : ''}
       <div class="field-row">
         ${q.fields.map(f=>`
           <div class="field-group">
@@ -719,6 +1010,12 @@
     container.querySelectorAll('input').forEach(inp=>{
       inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitAnswer(q, container); });
     });
+    if(hint){
+      document.getElementById('btn-hint').addEventListener('click', ()=>{
+        document.getElementById('hint-box').style.display = 'block';
+        document.getElementById('btn-hint').style.display = 'none';
+      });
+    }
     document.getElementById('btn-submit').addEventListener('click', ()=>submitAnswer(q, container));
     document.getElementById('btn-quit').addEventListener('click', ()=>endSession(true));
   }
