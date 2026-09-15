@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>即算ノート</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#E8E4D9;
+    --paper-line: rgba(51,71,91,0.07);
+    --ink:#262420;
+    --ink-soft:#5b5749;
+    --red:#B33B2E;
+    --red-soft:#c9635a;
+    --navy:#33475B;
+    --moss:#5C7A5A;
+    --moss-soft:#87a186;
+    --line:#c9c3b4;
+    --card:#f2efe6;
+    --radius: 3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background-color: var(--paper);
+    background-image:
+      repeating-linear-gradient(0deg, var(--paper-line) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, var(--paper-line) 0 1px, transparent 1px 28px);
+    color: var(--ink);
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    min-height: 100vh;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:480px;
+    min-height:100vh;
+    padding: 22px 20px 40px;
+    display:flex;
+    flex-direction:column;
+  }
+  .num{ font-family:'Space Grotesk', monospace; font-variant-numeric: tabular-nums; }
+
+  header.top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom: 1.5px solid var(--ink);
+    padding-bottom:10px;
+    margin-bottom: 22px;
+  }
+  header.top .brand{
+    font-size: 20px;
+    font-weight:700;
+    letter-spacing: 0.02em;
+  }
+  header.top .brand .seal{
+    display:inline-block;
+    background: var(--red);
+    color:#fff;
+    font-size:11px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    margin-left:6px;
+    vertical-align: 2px;
+    font-weight:500;
+  }
+  header.top nav{ display:flex; gap:14px; }
+  header.top nav button{
+    background:none;border:none;font-family:inherit;font-size:13px;color:var(--ink-soft);
+    cursor:pointer; padding:2px 0; border-bottom: 2px solid transparent;
+  }
+  header.top nav button.active{ color:var(--ink); border-bottom-color: var(--red); font-weight:500;}
+
+  .screen{ display:none; flex:1; flex-direction:column; }
+  .screen.active{ display:flex; }
+
+  /* ---------- HOME ---------- */
+  .home-lead{ margin-bottom: 26px; }
+  .home-lead .kicker{ font-size:13px; color:var(--ink-soft); margin-bottom:4px; }
+  .home-lead .headline{ font-size: 26px; font-weight:700; line-height:1.4; }
+
+  .tree-wrap{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 14px 16px;
+    margin-bottom: 20px;
+  }
+  .tree-wrap svg{ width:100%; height:auto; display:block; }
+  .tree-caption{ display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; }
+  .tree-caption .total{ font-size:13px; color:var(--ink-soft); }
+  .tree-caption .total b{ font-size:16px; color:var(--ink); font-weight:600; }
+  .tree-caption .today{ font-size:12px; color: var(--red); font-weight:500; }
+
+  .cta-primary{
+    background: var(--red);
+    color:#fff;
+    border:none;
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    font-size:16px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+    width:100%;
+    margin-bottom: 10px;
+    letter-spacing: 0.02em;
+  }
+  .cta-primary:active{ background: var(--red-soft); }
+  .cta-secondary{
+    background:none;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: var(--radius);
+    padding: 11px 16px;
+    font-size:14px;
+    font-family:inherit;
+    cursor:pointer;
+    width:100%;
+  }
+
+  .home-status{ font-size:13px; color:var(--ink-soft); margin: 4px 0 18px; line-height:1.6;}
+  .home-status strong{ color:var(--ink); font-weight:600; }
+
+  /* ---------- SESSION ---------- */
+  .session-meta{
+    display:flex; justify-content:space-between; font-size:12px; color:var(--ink-soft); margin-bottom: 18px;
+  }
+  .progress-bar{ height:3px; background:var(--line); border-radius:2px; overflow:hidden; margin-bottom: 24px;}
+  .progress-bar > div{ height:100%; background:var(--navy); transition: width .3s ease;}
+
+  .problem-type-label{
+    font-size:12px; color: var(--navy); font-weight:500; margin-bottom: 10px;
+    border-left: 3px solid var(--navy); padding-left:8px;
+  }
+  .prompt-card{
+    background: var(--card);
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 30px 20px;
+    text-align:center;
+    margin-bottom: 20px;
+    min-height: 120px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap: 10px;
+  }
+  .prompt-card .prompt-text{
+    font-family:'Space Grotesk', monospace;
+    font-size: 30px;
+    font-weight:600;
+    letter-spacing: 0.02em;
+  }
+  .prompt-card .prompt-sub{ font-size:14px; color:var(--ink-soft); line-height:1.5;}
+
+  .dot-field{
+    position:relative;
+    width:100%;
+    height: 150px;
+    background: #fff;
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .dot-field .dot{
+    position:absolute;
+    width:16px;height:16px;border-radius:50%;
+    background: var(--navy);
+    transform: translate(-50%,-50%);
+  }
+
+  .field-row{ display:flex; gap:10px; margin-bottom:14px; }
+  .field-group{ flex:1; }
+  .field-group label{ display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; }
+  .field-group input{
+    width:100%;
+    font-family:'Space Grotesk', monospace;
+    font-size: 22px;
+    text-align:right;
+    padding: 10px 12px;
+    border: 1.5px solid var(--ink);
+    border-radius: var(--radius);
+    background:#fff;
+    color: var(--ink);
+  }
+  .field-group input:focus{ outline:2px solid var(--red); outline-offset:1px; }
+
+  .answer-actions{ display:flex; gap:10px; margin-top:4px; }
+  .btn-submit{
+    flex:1; background: var(--ink); color:#fff; border:none; border-radius: var(--radius);
+    padding: 14px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer;
+  }
+  .btn-quit{
+    background:none; border:1px solid var(--line); color: var(--ink-soft); border-radius: var(--radius);
+    padding: 14px 16px; font-size:13px; font-family:inherit; cursor:pointer;
+  }
+
+  .feedback-card{
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 18px;
+    border: 1.5px solid;
+  }
+  .feedback-card.ok{ background:#eef2ea; border-color: var(--moss); }
+  .feedback-card.near{ background:#f5efe0; border-color:#b8923a; }
+  .feedback-card.no{ background:#f5e9e6; border-color: var(--red-soft); }
+  .feedback-card .fb-title{ font-size:15px; font-weight:700; margin-bottom:4px; }
+  .feedback-card.ok .fb-title{ color: var(--moss); }
+  .feedback-card.near .fb-title{ color:#8a6a24; }
+  .feedback-card.no .fb-title{ color: var(--red); }
+  .feedback-card .fb-body{ font-size:13.5px; color: var(--ink-soft); line-height:1.6; }
+  .btn-next{
+    background: var(--navy); color:#fff; border:none; border-radius: var(--radius);
+    padding: 14px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; width:100%;
+  }
+
+  /* ---------- RESULT ---------- */
+  .result-tier{
+    font-size: 22px; font-weight:700; margin-bottom: 6px;
+  }
+  .result-sub{ font-size:13px; color:var(--ink-soft); margin-bottom: 22px; }
+  .result-grid{ display:flex; gap:10px; margin-bottom:22px; }
+  .stat-box{
+    flex:1; background: var(--card); border:1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 10px; text-align:center;
+  }
+  .stat-box .stat-num{ font-family:'Space Grotesk',monospace; font-size:22px; font-weight:700; }
+  .stat-box .stat-label{ font-size:11px; color:var(--ink-soft); margin-top:2px;}
+
+  .compare-list{ margin-bottom: 24px; }
+  .compare-row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding: 9px 0; border-bottom: 1px solid var(--line); font-size:13.5px;
+  }
+  .compare-row .ctype{ color: var(--ink-soft); }
+  .compare-row .cval{ font-family:'Space Grotesk',monospace; font-weight:600; }
+  .compare-row .cval.up{ color: var(--moss); }
+  .compare-row .cval.down{ color: var(--red); }
+
+  /* ---------- STATS ---------- */
+  .skill-row{ margin-bottom: 16px; }
+  .skill-row .skill-head{ display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px; }
+  .skill-row .skill-head .sname{ font-weight:600; }
+  .skill-row .skill-head .smeta{ color:var(--ink-soft); font-family:'Space Grotesk',monospace; }
+  .skill-bar{ height:10px; background: var(--card); border:1px solid var(--line); border-radius:2px; overflow:hidden;}
+  .skill-bar > div{ height:100%; background: var(--navy); }
+  .skill-empty{ font-size:12px; color:var(--ink-soft); }
+
+  .reset-link{
+    margin-top: 30px; text-align:center; font-size:12px; color: var(--ink-soft);
+    text-decoration:underline; cursor:pointer; background:none; border:none; font-family:inherit;
+  }
+
+  footer.note{ margin-top:auto; padding-top: 26px; font-size:11px; color:var(--ink-soft); text-align:center; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <div class="brand">即算ノート<span class="seal">Phase 0</span></div>
+    <nav>
+      <button data-nav="home" class="active">ホーム</button>
+      <button data-nav="stats">能力</button>
+    </nav>
+  </header>
+
+  <!-- HOME -->
+  <section class="screen active" id="screen-home">
+    <div class="home-lead">
+      <div class="kicker">実務のための数的感覚トレーニング</div>
+      <div class="headline">今日の5分を、<br>積み重ねる。</div>
+    </div>
+
+    <div class="tree-wrap">
+      <svg id="tree-svg" viewBox="0 0 200 170"></svg>
+      <div class="tree-caption">
+        <div class="total">これまでに <b class="num" id="total-count">0</b> 問</div>
+        <div class="today num" id="today-count"></div>
+      </div>
+    </div>
+
+    <div class="home-status" id="home-status"></div>
+
+    <button class="cta-primary" id="btn-start">今日の5分をはじめる</button>
+    <button class="cta-secondary" data-nav="stats">これまでの能力を見る</button>
+  </section>
+
+  <!-- SESSION -->
+  <section class="screen" id="screen-session">
+    <div class="session-meta">
+      <span id="session-progress-text">1 / 8</span>
+      <span id="session-timer">00:00</span>
+    </div>
+    <div class="progress-bar"><div id="session-progress-bar" style="width:0%"></div></div>
+
+    <div id="problem-type-label" class="problem-type-label"></div>
+
+    <div id="prompt-area"></div>
+
+    <div id="input-area"></div>
+
+    <div id="feedback-area"></div>
+  </section>
+
+  <!-- RESULT -->
+  <section class="screen" id="screen-result">
+    <div class="result-tier" id="result-tier"></div>
+    <div class="result-sub" id="result-sub"></div>
+
+    <div class="result-grid">
+      <div class="stat-box"><div class="stat-num num" id="result-count">0</div><div class="stat-label">解いた問題</div></div>
+      <div class="stat-box"><div class="stat-num num" id="result-acc">0%</div><div class="stat-label">正答率</div></div>
+      <div class="stat-box"><div class="stat-num num" id="result-time">0.0秒</div><div class="stat-label">平均回答時間</div></div>
+    </div>
+
+    <div class="compare-list" id="compare-list"></div>
+
+    <button class="cta-primary" id="btn-result-home">ホームへ戻る</button>
+  </section>
+
+  <!-- STATS -->
+  <section class="screen" id="screen-stats">
+    <div class="home-lead" style="margin-bottom:18px;">
+      <div class="kicker">能力分析</div>
+      <div class="headline" style="font-size:22px;">タイプ別の正答率</div>
+    </div>
+    <div id="stats-list"></div>
+    <button class="reset-link" id="btn-reset">この端末の記録をすべて消去する</button>
+  </section>
+
+  <footer class="note">全ての記録はこの端末にのみ保存されます。</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= storage helpers (browser localStorage) ================= */
+  const STORAGE_PREFIX = 'sokusan-note:';
+  async function stGet(key){
+    try{
+      const raw = localStorage.getItem(STORAGE_PREFIX+key);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  async function stSet(key, value){
+    try{ localStorage.setItem(STORAGE_PREFIX+key, JSON.stringify(value)); return true; }
+    catch(e){ console.error('storage set failed', key, e); return false; }
+  }
+  async function stDelete(key){
+    try{ localStorage.removeItem(STORAGE_PREFIX+key); }catch(e){ /* ignore */ }
+  }
+  function stListKeys(){
+    const keys = [];
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf(STORAGE_PREFIX)===0) keys.push(k.slice(STORAGE_PREFIX.length));
+    }
+    return keys;
+  }
+
+  function todayStr(offsetDays){
+    offsetDays = offsetDays || 0;
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  /* ================= constants ================= */
+  const TYPES = ['add','sub','mul','div','est','qty','biz'];
+  const TYPE_LABEL = {add:'足し算', sub:'引き算', mul:'かけ算', div:'割り算', est:'概算', qty:'瞬間数量認識', biz:'実務計算'};
+  const SESSION_LEN = 8;
+
+  function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+  function choice(arr){ return arr[randInt(0,arr.length-1)]; }
+
+  /* ================= app state ================= */
+  const S = {
+    meta: null,           // {totalProblems, totalCorrect, totalTimeMs, firstDate}
+    skills: {},           // type -> {level, streakCorrect, streakWrong, log:[{correct,ms}]}
+    dailyToday: null,
+    dailyYesterday: null,
+    session: null,
+    screen: 'home'
+  };
+
+  function defaultSkill(){ return {level:1, streakCorrect:0, streakWrong:0, log:[]}; }
+  function defaultDaily(){ return {count:0, correct:0, timeMsSum:0, byType:{}}; }
+
+  async function loadAll(){
+    S.meta = (await stGet('meta')) || {totalProblems:0, totalCorrect:0, totalTimeMs:0, firstDate: todayStr()};
+    for (const t of TYPES){
+      S.skills[t] = (await stGet('skill:'+t)) || defaultSkill();
+    }
+    S.dailyToday = (await stGet('daily:'+todayStr())) || defaultDaily();
+    S.dailyYesterday = await stGet('daily:'+todayStr(-1));
+  }
+
+  function skillAvg(log){
+    if(!log || log.length===0) return {acc:null, avgMs:null};
+    let c=0, sum=0;
+    for(const e of log){ if(e.correct) c++; sum+=e.ms; }
+    return {acc: (c/log.length)*100, avgMs: sum/log.length};
+  }
+
+  /* ================= problem generation ================= */
+  function genAdd(level){
+    let a,b;
+    if(level<=1){ a=randInt(1,9); b=randInt(1,9); }
+    else if(level===2){ a=randInt(10,99); b=randInt(1,9); }
+    else if(level===3){ a=randInt(10,99); b=randInt(10,99); }
+    else if(level===4){ a=randInt(100,999); b=randInt(10,99); }
+    else { a=randInt(100,999); b=randInt(100,999); }
+    const correct=a+b;
+    return mkNumeric('add', level, `${a} + ${b}`, correct, Math.max(1, Math.round(correct*0.02)));
+  }
+  function genSub(level){
+    let a,b;
+    if(level<=1){ a=randInt(2,9); b=randInt(1,a); }
+    else if(level===2){ a=randInt(10,99); b=randInt(1,9); }
+    else if(level===3){ a=randInt(10,99); b=randInt(10,a); }
+    else if(level===4){ a=randInt(100,999); b=randInt(10,99); }
+    else { a=randInt(100,999); b=randInt(100,999); if(b>a){ const t=a; a=b; b=t; } }
+    const correct=a-b;
+    return mkNumeric('sub', level, `${a} − ${b}`, correct, Math.max(1, Math.round(correct*0.02)));
+  }
+  function genMul(level){
+    let a,b;
+    if(level<=1){ a=randInt(1,9); b=randInt(1,9); }
+    else if(level===2){ a=randInt(10,99); b=randInt(1,9); }
+    else if(level===3){ a=randInt(10,99); b=randInt(10,99); }
+    else if(level===4){ a=randInt(100,999); b=randInt(1,9); }
+    else { a=randInt(100,999); b=randInt(10,99); }
+    const correct=a*b;
+    return mkNumeric('mul', level, `${a} × ${b}`, correct, Math.max(1, Math.round(correct*0.03)));
+  }
+  function genDiv(level){
+    let divisor, dividend;
+    if(level<=1){ divisor=randInt(2,9); dividend=randInt(5,50); }
+    else if(level===2){ divisor=randInt(2,9); dividend=randInt(20,99); }
+    else if(level===3){ divisor=randInt(2,12); dividend=randInt(50,300); }
+    else if(level===4){ divisor=randInt(2,12); dividend=randInt(100,600); }
+    else { divisor=randInt(2,15); dividend=randInt(200,999); }
+    const q = Math.floor(dividend/divisor), r = dividend % divisor;
+    return {
+      type:'div', level,
+      prompt: `${dividend} ÷ ${divisor}`,
+      promptSub: '商とあまりを求めてください',
+      fields: [{key:'q', label:'商'}, {key:'r', label:'あまり'}],
+      evaluate: (v)=>{
+        const uq = Number(v.q), ur = Number(v.r);
+        const correctFlag = uq===q && ur===r;
+        const near = !correctFlag && uq===q;
+        return {correct: correctFlag, near, correctText: `商 ${q}　あまり ${r}`};
+      }
+    };
+  }
+  function genEst(level){
+    const ranges = {1:[10,99], 2:[50,300], 3:[100,999], 4:[500,4999], 5:[1000,9999]};
+    const [lo,hi] = ranges[level] || ranges[3];
+    const op = (level<=1) ? 'sum' : choice(['sum','product']);
+    let a,b,correct,text;
+    if(op==='sum'){
+      a=randInt(lo,hi); b=randInt(lo,hi);
+      correct = a+b;
+      text = `${a} + ${b} はだいたいいくつ？`;
+    } else {
+      a=randInt(lo,hi); b=randInt(2,25);
+      correct = a*b;
+      text = `${a} × ${b} はだいたいいくつ？`;
+    }
+    const tolerance = Math.max(3, Math.round(correct*0.1));
+    return {
+      type:'est', level,
+      prompt: text,
+      promptSub: `正確な計算をせず、概算で答えてください（±${tolerance}以内で正解）`,
+      fields: [{key:'ans', label:'およその値'}],
+      evaluate: (v)=>{
+        const u = Number(v.ans);
+        const diff = Math.abs(u-correct);
+        const correctFlag = diff<=tolerance;
+        const near = !correctFlag && diff<=tolerance*2;
+        return {correct: correctFlag, near, correctText: `目安: ${correct}`};
+      }
+    };
+  }
+  function genQty(level){
+    const ranges = {1:[1,3], 2:[3,5], 3:[5,7], 4:[6,9], 5:[7,10]};
+    const showMs = {1:1000, 2:850, 3:700, 4:600, 5:500}[level] || 700;
+    const [lo,hi] = ranges[level] || ranges[3];
+    const n = randInt(lo,hi);
+    const dots = [];
+    let attempts=0;
+    while(dots.length<n && attempts<500){
+      attempts++;
+      const x = randInt(10,90), y = randInt(10,90);
+      let ok=true;
+      for(const d of dots){ if(Math.hypot(d.x-x, d.y-y) < 16){ ok=false; break; } }
+      if(ok) dots.push({x,y});
+    }
+    return {
+      type:'qty', level,
+      isQty:true,
+      dots, showMs, n,
+      promptSub: '一瞬だけ表示される点の数を数えてください',
+      fields: [{key:'ans', label:'いくつ見えた？'}],
+      evaluate: (v)=>{
+        const u = Number(v.ans);
+        const correctFlag = u===n;
+        const near = !correctFlag && Math.abs(u-n)===1;
+        return {correct: correctFlag, near, correctText: String(n)};
+      }
+    };
+  }
+  function genBiz(level){
+    const ranges = {1:[100,999], 2:[500,2999], 3:[1000,9999], 4:[5000,49999], 5:[10000,99999]};
+    const [lo,hi] = ranges[level] || ranges[3];
+    const amount = randInt(lo,hi);
+    const sub = choice(['tax','discount']);
+    let correct, text;
+    if(sub==='tax'){
+      const rate = choice([8,10]);
+      correct = Math.floor(amount*(1+rate/100));
+      text = `${amount}円の商品、消費税${rate}%込みの支払い額は？`;
+    } else {
+      const rate = choice([10,20,30,40,50]);
+      correct = Math.floor(amount*(1-rate/100));
+      text = `${amount}円の商品が${rate}%引き。支払い額は？`;
+    }
+    return {
+      type:'biz', level,
+      prompt: text,
+      promptSub: '1円未満は切り捨てで計算してください',
+      fields: [{key:'ans', label:'金額（円）'}],
+      evaluate: (v)=>{
+        const u = Number(v.ans);
+        const diff = Math.abs(u-correct);
+        const correctFlag = diff===0;
+        const near = !correctFlag && diff<=1;
+        return {correct: correctFlag, near, correctText: `${correct}円`};
+      }
+    };
+  }
+  function mkNumeric(type, level, promptText, correct, tolerance){
+    return {
+      type, level,
+      prompt: promptText,
+      promptSub: '',
+      fields: [{key:'ans', label:'答え'}],
+      evaluate: (v)=>{
+        const u = Number(v.ans);
+        const diff = Math.abs(u-correct);
+        const correctFlag = u===correct;
+        const near = !correctFlag && diff<=tolerance;
+        return {correct: correctFlag, near, correctText: String(correct)};
+      }
+    };
+  }
+  const GENERATORS = {add:genAdd, sub:genSub, mul:genMul, div:genDiv, est:genEst, qty:genQty, biz:genBiz};
+
+  function buildSessionQueue(){
+    const weights = TYPES.map(t=>{
+      const {acc} = skillAvg(S.skills[t].log);
+      const a = (acc===null) ? 70 : acc;
+      return {t, w: Math.min(4, Math.max(0.6, 1 + (100-a)/50))};
+    });
+    const queue = [];
+    let lastType = null;
+    for(let i=0;i<SESSION_LEN;i++){
+      let pick;
+      for(let tries=0; tries<6; tries++){
+        const totalW = weights.reduce((s,x)=>s+x.w,0);
+        let r = Math.random()*totalW;
+        pick = weights[weights.length-1].t;
+        for(const x of weights){ if(r<x.w){ pick=x.t; break; } r-=x.w; }
+        if(pick !== lastType || SESSION_LEN<=TYPES.length) break;
+      }
+      lastType = pick;
+      const level = S.skills[pick].level;
+      queue.push(GENERATORS[pick](level));
+    }
+    return queue;
+  }
+
+  /* ================= tree visualization ================= */
+  function renderTree(total, todayCount){
+    const stage = Math.min(6, Math.floor(total/25));
+    const els = [];
+    function branch(x1,y1,angle,len,depth){
+      if(depth<=0 || len<4){
+        if(stage>=1) els.push(`<circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="3" fill="var(--moss-soft)"/>`);
+        return;
+      }
+      const x2 = x1 + len*Math.sin(angle);
+      const y2 = y1 - len*Math.cos(angle);
+      els.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="var(--navy)" stroke-width="${Math.max(1,depth)}" stroke-linecap="round"/>`);
+      const branches = depth>3 ? 3 : 2;
+      for(let i=0;i<branches;i++){
+        const spread = 0.35 + Math.random()*0.25;
+        const dir = (i - (branches-1)/2) || (Math.random()>0.5?1:-1);
+        branch(x2,y2, angle + spread*dir, len*0.72, depth-1);
+      }
+    }
+    const depth = 2 + stage;
+    branch(100,165,0, 24 + stage*3, depth);
+    const ground = `<line x1="20" y1="165" x2="180" y2="165" stroke="var(--line)" stroke-width="1"/>`;
+    const seedlings = todayCount>0
+      ? Array.from({length: Math.min(todayCount,10)}, (_,i)=>{
+          const x = 30 + i*15;
+          return `<circle cx="${x}" cy="163" r="2.3" fill="var(--red)"/>`;
+        }).join('')
+      : '';
+    return `<svg-inner>${ground}${els.join('')}${seedlings}</svg-inner>`.replace(/<\/?svg-inner>/g,'');
+  }
+
+  /* ================= rendering: home ================= */
+  function renderHome(){
+    const total = S.meta.totalProblems;
+    document.getElementById('total-count').textContent = total.toLocaleString();
+    document.getElementById('tree-svg').innerHTML = renderTree(total, S.dailyToday.count);
+
+    const todayEl = document.getElementById('today-count');
+    todayEl.textContent = S.dailyToday.count>0 ? `今日 ${S.dailyToday.count}問` : '';
+
+    const statusEl = document.getElementById('home-status');
+    if(S.dailyToday.count===0){
+      statusEl.innerHTML = total===0
+        ? '最初の5分を始めましょう。数量・暗算・概算・実務計算を組み合わせて出題します。'
+        : `今日はまだ記録がありません。全体の正答率は <strong>${Math.round(S.meta.totalCorrect/Math.max(1,S.meta.totalProblems)*100)}%</strong> です。`;
+    } else {
+      const acc = Math.round(S.dailyToday.correct/S.dailyToday.count*100);
+      statusEl.innerHTML = `今日はすでに <strong>${S.dailyToday.count}問</strong>、正答率 <strong>${acc}%</strong> です。もう一度取り組むこともできます。`;
+    }
+  }
+
+  /* ================= session flow ================= */
+  let sessionTimerHandle = null;
+
+  function startSession(){
+    S.session = {
+      queue: buildSessionQueue(),
+      idx: 0,
+      results: [],
+      startedAt: Date.now()
+    };
+    showScreen('session');
+    startTimer();
+    renderProblem();
+  }
+
+  function startTimer(){
+    const el = document.getElementById('session-timer');
+    clearInterval(sessionTimerHandle);
+    sessionTimerHandle = setInterval(()=>{
+      if(!S.session) return;
+      const sec = Math.floor((Date.now()-S.session.startedAt)/1000);
+      const m = String(Math.floor(sec/60)).padStart(2,'0');
+      const s = String(sec%60).padStart(2,'0');
+      el.textContent = `${m}:${s}`;
+    }, 500);
+  }
+
+  function renderProblem(){
+    const q = S.session.queue[S.session.idx];
+    document.getElementById('session-progress-text').textContent = `${S.session.idx+1} / ${S.session.queue.length}`;
+    document.getElementById('session-progress-bar').style.width = `${Math.round((S.session.idx)/S.session.queue.length*100)}%`;
+    document.getElementById('problem-type-label').textContent = TYPE_LABEL[q.type] + `　Lv.${q.level}`;
+    document.getElementById('feedback-area').innerHTML = '';
+
+    const promptArea = document.getElementById('prompt-area');
+    const inputArea = document.getElementById('input-area');
+
+    if(q.isQty){
+      promptArea.innerHTML = `
+        <div class="prompt-card">
+          <div class="prompt-sub">${q.promptSub}</div>
+          <div class="dot-field" id="dot-field"></div>
+        </div>`;
+      const field = document.getElementById('dot-field');
+      field.innerHTML = q.dots.map(d=>`<div class="dot" style="left:${d.x}%; top:${d.y}%"></div>`).join('');
+      inputArea.innerHTML = '';
+      setTimeout(()=>{
+        field.innerHTML = '';
+        renderInputForm(q, inputArea);
+        q._startTime = performance.now();
+      }, q.showMs);
+    } else {
+      promptArea.innerHTML = `
+        <div class="prompt-card">
+          <div class="prompt-text">${q.prompt}</div>
+          ${q.promptSub ? `<div class="prompt-sub">${q.promptSub}</div>` : ''}
+        </div>`;
+      renderInputForm(q, inputArea);
+      q._startTime = performance.now();
+    }
+  }
+
+  function renderInputForm(q, container){
+    container.innerHTML = `
+      <div class="field-row">
+        ${q.fields.map(f=>`
+          <div class="field-group">
+            <label>${f.label}</label>
+            <input type="number" inputmode="numeric" data-key="${f.key}" autocomplete="off">
+          </div>`).join('')}
+      </div>
+      <div class="answer-actions">
+        <button class="btn-submit" id="btn-submit">回答する</button>
+        <button class="btn-quit" id="btn-quit">終了する</button>
+      </div>`;
+    const firstInput = container.querySelector('input');
+    if(firstInput) firstInput.focus();
+    container.querySelectorAll('input').forEach(inp=>{
+      inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitAnswer(q, container); });
+    });
+    document.getElementById('btn-submit').addEventListener('click', ()=>submitAnswer(q, container));
+    document.getElementById('btn-quit').addEventListener('click', ()=>endSession(true));
+  }
+
+  function submitAnswer(q, container){
+    const values = {};
+    let hasEmpty = false;
+    container.querySelectorAll('input').forEach(inp=>{
+      values[inp.dataset.key] = inp.value;
+      if(inp.value==='') hasEmpty = true;
+    });
+    if(hasEmpty) return;
+
+    const elapsedMs = performance.now() - q._startTime;
+    const result = q.evaluate(values);
+
+    const skill = S.skills[q.type];
+    const before = skillAvg(skill.log);
+
+    updateSkillAfterAnswer(q.type, result.correct, elapsedMs);
+    updateDailyAfterAnswer(q.type, result.correct, elapsedMs);
+    S.session.results.push({type:q.type, correct:result.correct, ms:elapsedMs});
+
+    renderFeedback(result, elapsedMs, before);
+  }
+
+  function updateSkillAfterAnswer(type, correct, ms){
+    const s = S.skills[type];
+    s.log.push({correct, ms});
+    if(s.log.length>20) s.log.shift();
+    if(correct){ s.streakCorrect++; s.streakWrong=0; }
+    else { s.streakWrong++; s.streakCorrect=0; }
+    if(s.streakCorrect>=3){ s.level=Math.min(5,s.level+1); s.streakCorrect=0; }
+    if(s.streakWrong>=2){ s.level=Math.max(1,s.level-1); s.streakWrong=0; }
+  }
+  function updateDailyAfterAnswer(type, correct, ms){
+    const d = S.dailyToday;
+    d.count++; if(correct) d.correct++; d.timeMsSum+=ms;
+    if(!d.byType[type]) d.byType[type] = {count:0, correct:0, timeMsSum:0};
+    d.byType[type].count++; if(correct) d.byType[type].correct++; d.byType[type].timeMsSum+=ms;
+  }
+
+  const PRAISE_VARIANTS = ['正解です。','その調子です。','正解。良いペースです。'];
+
+  function renderFeedback(result, elapsedMs, before){
+    let cls, title, body;
+    if(result.correct){
+      cls='ok'; title='正解';
+      if(before.avgMs && S.session.results.length>2 && elapsedMs < before.avgMs){
+        const diff = ((before.avgMs - elapsedMs)/1000).toFixed(2);
+        body = `これまでの平均より ${diff}秒速く答えられました。`;
+      } else {
+        body = choice(PRAISE_VARIANTS);
+      }
+    } else if(result.near){
+      cls='near'; title='惜しい';
+      body = `考え方はかなり近いです。正解は ${result.correctText} でした。`;
+    } else {
+      cls='no'; title='不正解';
+      body = `正解は ${result.correctText} でした。`;
+    }
+    document.getElementById('feedback-area').innerHTML = `
+      <div class="feedback-card ${cls}">
+        <div class="fb-title">${title}</div>
+        <div class="fb-body">${body}</div>
+      </div>
+      <button class="btn-next" id="btn-next">次へ</button>`;
+    document.getElementById('input-area').innerHTML = '';
+    document.getElementById('btn-next').addEventListener('click', ()=>{
+      S.session.idx++;
+      if(S.session.idx >= S.session.queue.length){ endSession(false); }
+      else { renderProblem(); }
+    });
+  }
+
+  async function endSession(early){
+    clearInterval(sessionTimerHandle);
+    const results = S.session.results;
+    const count = results.length;
+    const correctCount = results.filter(r=>r.correct).length;
+    const avgMs = count>0 ? results.reduce((s,r)=>s+r.ms,0)/count : 0;
+
+    // persist aggregates
+    S.meta.totalProblems += count;
+    S.meta.totalCorrect += correctCount;
+    S.meta.totalTimeMs += results.reduce((s,r)=>s+r.ms,0);
+    await stSet('meta', S.meta);
+    await stSet('daily:'+todayStr(), S.dailyToday);
+    for(const t of TYPES){ await stSet('skill:'+t, S.skills[t]); }
+
+    // tier message
+    let tier;
+    if(count>=S.session.queue.length && !early) tier = '今日のトレーニング完了！';
+    else if(count>=5) tier = '今日の成長！';
+    else if(count>=1) tier = '今日の一歩！';
+    else tier = '';
+
+    document.getElementById('result-tier').textContent = tier || '記録なし';
+    document.getElementById('result-sub').textContent = count>0
+      ? `${count}問に取り組みました。`
+      : '次はもう少し進めてみましょう。';
+    document.getElementById('result-count').textContent = count;
+    document.getElementById('result-acc').textContent = count>0 ? Math.round(correctCount/count*100)+'%' : '—';
+    document.getElementById('result-time').textContent = count>0 ? (avgMs/1000).toFixed(2)+'秒' : '—';
+
+    // comparison vs yesterday, per type touched this session
+    const compareEl = document.getElementById('compare-list');
+    compareEl.innerHTML = '';
+    const typesToday = Object.keys(S.dailyToday.byType);
+    if(S.dailyYesterday && typesToday.length>0){
+      typesToday.forEach(t=>{
+        const y = S.dailyYesterday.byType && S.dailyYesterday.byType[t];
+        if(!y || y.count===0) return;
+        const yAvg = y.timeMsSum/y.count/1000;
+        const tAvg = S.dailyToday.byType[t].timeMsSum/S.dailyToday.byType[t].count/1000;
+        const diff = yAvg - tAvg;
+        const cls = diff>0 ? 'up' : (diff<0 ? 'down' : '');
+        const arrow = diff>0 ? `${diff.toFixed(2)}秒短縮` : (diff<0 ? `${Math.abs(diff).toFixed(2)}秒増加` : '変化なし');
+        const row = document.createElement('div');
+        row.className='compare-row';
+        row.innerHTML = `<span class="ctype">${TYPE_LABEL[t]}（昨日比）</span><span class="cval ${cls}">${arrow}</span>`;
+        compareEl.appendChild(row);
+      });
+    }
+    if(!compareEl.innerHTML){
+      compareEl.innerHTML = `<div class="skill-empty">比較できる昨日の記録がありません。明日からは昨日との比較が表示されます。</div>`;
+    }
+
+    S.session = null;
+    showScreen('result');
+  }
+
+  /* ================= stats screen ================= */
+  function renderStats(){
+    const el = document.getElementById('stats-list');
+    el.innerHTML = '';
+    TYPES.forEach(t=>{
+      const {acc, avgMs} = skillAvg(S.skills[t].log);
+      const row = document.createElement('div');
+      row.className = 'skill-row';
+      if(acc===null){
+        row.innerHTML = `
+          <div class="skill-head"><span class="sname">${TYPE_LABEL[t]}</span><span class="smeta">データなし</span></div>
+          <div class="skill-bar"><div style="width:0%"></div></div>`;
+      } else {
+        row.innerHTML = `
+          <div class="skill-head">
+            <span class="sname">${TYPE_LABEL[t]}　Lv.${S.skills[t].level}</span>
+            <span class="smeta">${Math.round(acc)}%　${(avgMs/1000).toFixed(2)}秒</span>
+          </div>
+          <div class="skill-bar"><div style="width:${Math.round(acc)}%"></div></div>`;
+      }
+      el.appendChild(row);
+    });
+  }
+
+  /* ================= navigation ================= */
+  function showScreen(name){
+    S.screen = name;
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('screen-'+name).classList.add('active');
+    document.querySelectorAll('header.top nav button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.nav===name);
+    });
+    if(name==='home') renderHome();
+    if(name==='stats') renderStats();
+  }
+
+  document.querySelectorAll('header.top nav button').forEach(b=>{
+    b.addEventListener('click', ()=>showScreen(b.dataset.nav));
+  });
+  document.getElementById('btn-start').addEventListener('click', startSession);
+  document.getElementById('btn-result-home').addEventListener('click', async ()=>{
+    S.dailyToday = (await stGet('daily:'+todayStr())) || defaultDaily();
+    showScreen('home');
+  });
+  document.getElementById('btn-reset').addEventListener('click', async ()=>{
+    if(!confirm('この端末に保存されたすべての記録を削除します。よろしいですか？')) return;
+    try{
+      for(const k of stListKeys()){ await stDelete(k); }
+    }catch(e){ /* ignore */ }
+    await loadAll();
+    showScreen('home');
+  });
+
+  /* ================= init ================= */
+  (async function init(){
+    await loadAll();
+    showScreen('home');
+  })();
+
+})();
+</script>
+</body>
+</html>
