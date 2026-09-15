@@ -436,6 +436,18 @@
 
   function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
   function choice(arr){ return arr[randInt(0,arr.length-1)]; }
+  function generateDots(n){
+    const dots = [];
+    let attempts = 0;
+    while(dots.length<n && attempts<500){
+      attempts++;
+      const x = randInt(10,90), y = randInt(10,90);
+      let ok = true;
+      for(const d of dots){ if(Math.hypot(d.x-x, d.y-y) < 16){ ok=false; break; } }
+      if(ok) dots.push({x,y});
+    }
+    return dots;
+  }
 
   const TEACHER_NAME = '凛先生';
 
@@ -537,7 +549,9 @@
     else if(level===4){ a=randInt(100,999); b=randInt(10,99); }
     else { a=randInt(100,999); b=randInt(100,999); }
     const correct=a+b;
-    return mkNumeric('add', level, `${a} + ${b}`, correct, Math.max(1, Math.round(correct*0.02)), techniqueForAddSub(a,b,'add'));
+    const p = mkNumeric('add', level, `${a} + ${b}`, correct, Math.max(1, Math.round(correct*0.02)), techniqueForAddSub(a,b,'add'));
+    if(level>=2) p.introKey = 'add-2digit';
+    return p;
   }
   function genSub(level){
     let a,b;
@@ -547,7 +561,9 @@
     else if(level===4){ a=randInt(100,999); b=randInt(10,99); }
     else { a=randInt(100,999); b=randInt(100,999); if(b>a){ const t=a; a=b; b=t; } }
     const correct=a-b;
-    return mkNumeric('sub', level, `${a} − ${b}`, correct, Math.max(1, Math.round(correct*0.02)), techniqueForAddSub(a,b,'sub'));
+    const p = mkNumeric('sub', level, `${a} − ${b}`, correct, Math.max(1, Math.round(correct*0.02)), techniqueForAddSub(a,b,'sub'));
+    if(level>=2) p.introKey = 'sub-2digit';
+    return p;
   }
   function genMul(level){
     let a,b;
@@ -557,7 +573,9 @@
     else if(level===4){ a=randInt(100,999); b=randInt(1,9); }
     else { a=randInt(100,999); b=randInt(10,99); }
     const correct=a*b;
-    return mkNumeric('mul', level, `${a} × ${b}`, correct, Math.max(1, Math.round(correct*0.03)), techniqueForMul(a,b));
+    const p = mkNumeric('mul', level, `${a} × ${b}`, correct, Math.max(1, Math.round(correct*0.03)), techniqueForMul(a,b));
+    if(level>=2) p.introKey = 'mul-2digit';
+    return p;
   }
   function genDiv(level){
     let divisor, dividend;
@@ -569,6 +587,7 @@
     const q = Math.floor(dividend/divisor), r = dividend % divisor;
     return {
       type:'div', level,
+      introKey: 'div-basic',
       prompt: `${dividend} ÷ ${divisor}`,
       promptSub: '商とあまりを求めてください',
       fields: [{key:'q', label:'商'}, {key:'r', label:'あまり'}],
@@ -597,6 +616,7 @@
     const tolerance = Math.max(3, Math.round(correct*0.1));
     return {
       type:'est', level,
+      introKey: 'est-basic',
       prompt: text,
       promptSub: `正確な計算をせず、概算で答えてください（±${tolerance}以内で正解）`,
       fields: [{key:'ans', label:'およその値'}],
@@ -614,18 +634,11 @@
     const showMs = {1:1000, 2:850, 3:700, 4:600, 5:500}[level] || 700;
     const [lo,hi] = ranges[level] || ranges[3];
     const n = randInt(lo,hi);
-    const dots = [];
-    let attempts=0;
-    while(dots.length<n && attempts<500){
-      attempts++;
-      const x = randInt(10,90), y = randInt(10,90);
-      let ok=true;
-      for(const d of dots){ if(Math.hypot(d.x-x, d.y-y) < 16){ ok=false; break; } }
-      if(ok) dots.push({x,y});
-    }
+    const dots = generateDots(n);
     return {
       type:'qty', level,
       isQty:true,
+      introKey: 'qty-basic',
       dots, showMs, n,
       promptSub: '一瞬だけ表示される点の数を数えてください',
       fields: [{key:'ans', label:'いくつ見えた？'}],
@@ -638,22 +651,39 @@
     };
   }
   function genBiz(level){
-    const ranges = {1:[100,999], 2:[500,2999], 3:[1000,9999], 4:[5000,49999], 5:[10000,99999]};
-    const [lo,hi] = ranges[level] || ranges[3];
-    const amount = randInt(lo,hi);
-    const sub = choice(['tax','discount']);
+    let amount, sub, rate;
+    if(level<=1){
+      amount = randInt(2,9)*10;                 // 20〜90（きりのよい数）
+      sub = 'discount';
+      rate = choice([10,50]);                   // 1ステップで暗算できる割合のみ
+    } else if(level===2){
+      amount = randInt(10,99)*10;                // 100〜990（きりのよい数）
+      sub = 'discount';
+      rate = choice([10,20,50]);
+    } else if(level===3){
+      amount = randInt(100,999);                 // 端数のある3桁
+      sub = choice(['discount','tax']);
+      rate = sub==='discount' ? choice([10,20,30]) : 10;
+    } else if(level===4){
+      amount = randInt(10,999)*10;                // 100〜9990（きりのよい数）
+      sub = choice(['discount','tax']);
+      rate = sub==='discount' ? choice([10,20,30,40]) : choice([8,10]);
+    } else {
+      amount = randInt(1000,9999);                // 端数のある4桁
+      sub = choice(['discount','tax']);
+      rate = sub==='discount' ? choice([10,20,30,40,50]) : choice([8,10]);
+    }
     let correct, text;
     if(sub==='tax'){
-      const rate = choice([8,10]);
       correct = Math.floor(amount*(1+rate/100));
       text = `${amount}円の商品、消費税${rate}%込みの支払い額は？`;
     } else {
-      const rate = choice([10,20,30,40,50]);
       correct = Math.floor(amount*(1-rate/100));
       text = `${amount}円の商品が${rate}%引き。支払い額は？`;
     }
     return {
       type:'biz', level,
+      introKey: sub==='discount' ? 'biz-discount' : 'biz-tax',
       prompt: text,
       promptSub: '1円未満は切り捨てで計算してください',
       fields: [{key:'ans', label:'金額（円）'}],
@@ -694,7 +724,15 @@
     'mul-x25': 'かけ算のコツ：25倍は「100倍して4で割る」',
     'mul-x50': 'かけ算のコツ：50倍は「100倍して2で割る」',
     'mul-x99': 'かけ算のコツ：99倍は「100倍して1回分引く」',
-    'mul-x125': 'かけ算のコツ：125倍は「1000倍して8で割る」'
+    'mul-x125': 'かけ算のコツ：125倍は「1000倍して8で割る」',
+    'biz-discount': '実務計算の基本：割引の計算',
+    'biz-tax': '実務計算の基本：消費税の計算',
+    'est-basic': '概算の基本：きりのよい数に丸める',
+    'qty-basic': '瞬間数量認識の基本：まとまりで見る',
+    'add-2digit': '2桁の足し算：位で分けて考える',
+    'sub-2digit': '2桁の引き算：位で分けて考える',
+    'mul-2digit': '2桁のかけ算：位で分けて考える',
+    'div-basic': '割り算の基本：九九から商を探す'
   };
   const FIXED_EXAMPLES = {
     'add-complement': {type:'add', a:98, b:37},
@@ -739,11 +777,207 @@
   }
 
   async function seenTechniques(){
-    return (await stGet('seenTechniques')) || [];
+    return (await stGet('seenLessons')) || [];
   }
   async function markTechniqueSeen(key){
     const list = await seenTechniques();
-    if(!list.includes(key)){ list.push(key); await stSet('seenTechniques', list); }
+    if(!list.includes(key)){ list.push(key); await stSet('seenLessons', list); }
+  }
+
+  const INTRO_KEYS = new Set(['biz-discount','biz-tax','est-basic','qty-basic','add-2digit','sub-2digit','mul-2digit','div-basic']);
+
+  function renderIntroExplain(key, onNext){
+    let lines, worked;
+    if(key==='biz-discount'){
+      const amount=20, rate=10, step=amount*rate/100, ans=amount-step;
+      lines = [
+        `割引の計算は、まず「割引される金額」を求めてから、元の金額から引きます。`,
+        `${rate}%は「100分の${rate}」という意味なので、${amount}円の${rate}%は ${amount} × ${rate} ÷ 100 = ${step}円です。`
+      ];
+      worked = `${amount} − ${step} = ${ans}円`;
+    } else if(key==='biz-tax'){
+      const amount=100, rate=10, step=amount*rate/100, ans=amount+step;
+      lines = [
+        `消費税込みの金額は、まず「税額」を求めてから、元の金額に足します。`,
+        `税率${rate}%の税額は ${amount} × ${rate} ÷ 100 = ${step}円です。`
+      ];
+      worked = `${amount} + ${step} = ${ans}円`;
+    } else if(key==='est-basic'){
+      const a=38, b=61, ra=Math.round(a/10)*10, rb=Math.round(b/10)*10;
+      lines = [
+        `概算では、正確な数のままではなく、近い「きりのよい数」に丸めてから計算します。`,
+        `${a} は ${ra} に、${b} は ${rb} に丸められます。`
+      ];
+      worked = `${ra} + ${rb} = ${ra+rb}（実際の答え: ${a+b}）`;
+    } else if(key==='add-2digit'){
+      const a=47, b=38, tensA=40, onesA=7, tensB=30, onesB=8;
+      lines = [
+        `2桁の足し算は、十の位と一の位に分けて計算すると整理しやすくなります。`,
+        `${a} は ${tensA}+${onesA}、${b} は ${tensB}+${onesB} に分けられます。`,
+        `十の位どうし: ${tensA}+${tensB}=${tensA+tensB}。一の位どうし: ${onesA}+${onesB}=${onesA+onesB}。`
+      ];
+      worked = `${tensA+tensB} + ${onesA+onesB} = ${a+b}`;
+    } else if(key==='sub-2digit'){
+      const a=68, b=23, tensA=60, onesA=8, tensB=20, onesB=3;
+      lines = [
+        `2桁の引き算も、十の位と一の位に分けて計算します。`,
+        `${a} は ${tensA}+${onesA}、${b} は ${tensB}+${onesB} に分けられます。`,
+        `十の位どうし: ${tensA}−${tensB}=${tensA-tensB}。一の位どうし: ${onesA}−${onesB}=${onesA-onesB}。`
+      ];
+      worked = `${tensA-tensB} + ${onesA-onesB} = ${a-b}`;
+    } else if(key==='mul-2digit'){
+      const a=34, b=6, tensA=30, onesA=4;
+      lines = [
+        `2桁×1桁のかけ算は、十の位と一の位に分けて、それぞれ掛けてから足します。`,
+        `${a} を ${tensA}+${onesA} に分けます。`,
+        `${tensA}×${b}=${tensA*b}。${onesA}×${b}=${onesA*b}。`
+      ];
+      worked = `${tensA*b} + ${onesA*b} = ${a*b}`;
+    } else if(key==='div-basic'){
+      lines = [
+        `割り算は、割る数の段（九九）を思い浮かべて、割られる数を超えない一番大きい答えを探します。`,
+        `6の段: 6, 12, 18, 24, 30, 36, 42, 48…　47を超えない一番大きい数は42（6×7）です。`
+      ];
+      worked = `47 − 42 = 5　→　商 7、あまり 5`;
+    } else { // qty-basic
+      lines = [
+        `点の数が多いときは、1つずつ数えるより、2つや3つのまとまりとして瞬時に捉えると速く正確になります。`,
+        `最初はゆっくり表示するので、まとまりを意識して数えてみましょう。`
+      ];
+      worked = '';
+    }
+    document.getElementById('prompt-area').innerHTML = `
+      <div class="lesson-head">
+        <div class="teacher-seal">凛</div>
+        <div>
+          <div class="teacher-name">${TEACHER_NAME}</div>
+          <div class="lesson-title">${LESSON_TITLE[key] || ''}</div>
+        </div>
+      </div>
+      <div class="speech-bubble">
+        ${lines.join('<br>')}
+        ${worked ? `<div class="worked-expr">${worked}</div>` : ''}
+      </div>`;
+    document.getElementById('input-area').innerHTML = `<button class="btn-next" id="btn-lesson-next">なぞってみる</button>`;
+    document.getElementById('feedback-area').innerHTML = '';
+    document.getElementById('btn-lesson-next').addEventListener('click', onNext);
+  }
+
+  function renderIntroTrace(key, onDone){
+    document.getElementById('feedback-area').innerHTML = '';
+
+    if(key==='qty-basic'){
+      const n = randInt(4,6);
+      const dots = generateDots(n);
+      document.getElementById('prompt-area').innerHTML = `
+        <div class="lesson-head">
+          <div class="teacher-seal">凛</div>
+          <div><div class="teacher-name">${TEACHER_NAME}</div><div class="lesson-title">まとまりを意識して数えてみましょう</div></div>
+        </div>
+        <div class="prompt-card"><div class="dot-field" id="dot-field"></div></div>`;
+      const field = document.getElementById('dot-field');
+      field.innerHTML = dots.map(d=>`<div class="dot" style="left:${d.x}%; top:${d.y}%"></div>`).join('');
+      document.getElementById('input-area').innerHTML = '';
+      setTimeout(()=>{
+        field.innerHTML = '';
+        document.getElementById('input-area').innerHTML = `
+          <div class="field-row"><div class="field-group"><label>いくつ見えた？</label><input type="number" inputmode="numeric" id="intro-ans"></div></div>
+          <div class="answer-actions"><button class="btn-submit" id="btn-trace-submit">確認する</button></div>`;
+        document.getElementById('intro-ans').focus();
+        document.getElementById('btn-trace-submit').addEventListener('click', ()=>{
+          const u = Number(document.getElementById('intro-ans').value);
+          const ok = u===n;
+          document.getElementById('input-area').innerHTML = '';
+          document.getElementById('feedback-area').innerHTML = `
+            <div class="feedback-card ${ok?'ok':'near'}"><div class="fb-title">${ok?'その通りです':'確認しましょう'}</div><div class="fb-body">正解は ${n} つでした。</div></div>
+            <button class="btn-next" id="btn-trace-done">この問題に進む</button>`;
+          document.getElementById('btn-trace-done').addEventListener('click', onDone);
+        });
+      }, 1500);
+      return;
+    }
+
+    let promptText, template, fields, correctVals;
+    if(key==='biz-discount'){
+      const amount = randInt(2,9)*10, rate = choice([10,20,50]);
+      const step = amount*rate/100, ans = amount-step;
+      promptText = `${amount}円の${rate}%引き`;
+      template = `割引額 ▢円　→　支払い額 ▢円`;
+      fields = [{key:'step',label:'割引額'},{key:'ans',label:'支払い額'}];
+      correctVals = {step, ans};
+    } else if(key==='biz-tax'){
+      const amount = randInt(10,99)*10, rate = 10;
+      const step = amount*rate/100, ans = amount+step;
+      promptText = `${amount}円、消費税${rate}%込み`;
+      template = `税額 ▢円　→　支払い額 ▢円`;
+      fields = [{key:'step',label:'税額'},{key:'ans',label:'支払い額'}];
+      correctVals = {step, ans};
+    } else if(key==='add-2digit'){
+      const a=randInt(21,89), b=randInt(21,89);
+      const tensA=Math.floor(a/10)*10, onesA=a%10, tensB=Math.floor(b/10)*10, onesB=b%10;
+      promptText = `${a}(${tensA}+${onesA}) + ${b}(${tensB}+${onesB})`;
+      template = `十の位の和 ▢　→　答え ▢`;
+      fields = [{key:'step',label:'十の位の和'},{key:'ans',label:'答え'}];
+      correctVals = {step: tensA+tensB, ans: a+b};
+    } else if(key==='sub-2digit'){
+      const tensA=randInt(3,8)*10, onesA=randInt(1,9);
+      const tensB=randInt(1,tensA/10-1)*10, onesB=randInt(0,onesA);
+      const a=tensA+onesA, b=tensB+onesB;
+      promptText = `${a}(${tensA}+${onesA}) − ${b}(${tensB}+${onesB})`;
+      template = `十の位の差 ▢　→　答え ▢`;
+      fields = [{key:'step',label:'十の位の差'},{key:'ans',label:'答え'}];
+      correctVals = {step: tensA-tensB, ans: a-b};
+    } else if(key==='mul-2digit'){
+      const a=randInt(21,89), b=randInt(2,9);
+      const tensA=Math.floor(a/10)*10, onesA=a%10;
+      promptText = `${a}(${tensA}+${onesA}) × ${b}`;
+      template = `十の位の積 ▢　→　答え ▢`;
+      fields = [{key:'step',label:'十の位の積'},{key:'ans',label:'答え'}];
+      correctVals = {step: tensA*b, ans: a*b};
+    } else if(key==='div-basic'){
+      const divisor = randInt(2,9);
+      const dividend = randInt(divisor*3, divisor*9+divisor-1);
+      promptText = `${dividend} ÷ ${divisor}`;
+      template = `商 ▢　→　あまり ▢`;
+      fields = [{key:'q',label:'商'},{key:'r',label:'あまり'}];
+      correctVals = {q: Math.floor(dividend/divisor), r: dividend%divisor};
+    } else { // est-basic
+      const a = randInt(20,90), b = randInt(20,90);
+      const ra = Math.round(a/10)*10, rb = Math.round(b/10)*10;
+      promptText = `${a} + ${b} はだいたいいくつ？`;
+      template = `${a}→▢、${b}→▢ に丸めてから足す`;
+      fields = [{key:'ans',label:'およその値'}];
+      correctVals = {ans: ra+rb};
+    }
+
+    document.getElementById('prompt-area').innerHTML = `
+      <div class="lesson-head">
+        <div class="teacher-seal">凛</div>
+        <div><div class="teacher-name">${TEACHER_NAME}</div><div class="lesson-title">同じやり方で、なぞってみましょう</div></div>
+      </div>
+      <div class="lesson-trace-prompt">${promptText}</div>
+      <div class="lesson-trace-expr">${template}</div>`;
+    document.getElementById('input-area').innerHTML = `
+      <div class="field-row">
+        ${fields.map(f=>`<div class="field-group"><label>${f.label}</label><input type="number" inputmode="numeric" data-key="${f.key}"></div>`).join('')}
+      </div>
+      <div class="answer-actions"><button class="btn-submit" id="btn-trace-submit">確認する</button></div>`;
+
+    document.getElementById('btn-trace-submit').addEventListener('click', ()=>{
+      let ok = true;
+      document.querySelectorAll('#input-area input').forEach(inp=>{
+        if(Number(inp.value) !== correctVals[inp.dataset.key]) ok=false;
+      });
+      const ansText = Object.keys(correctVals).map(k=>{
+        const labels = {step:'途中の値', ans:'答え', q:'商', r:'あまり'};
+        return `${labels[k]||k}: ${correctVals[k]}`;
+      }).join('　');
+      document.getElementById('input-area').innerHTML = '';
+      document.getElementById('feedback-area').innerHTML = `
+        <div class="feedback-card ${ok?'ok':'near'}"><div class="fb-title">${ok?'その通りです':'確認しましょう'}</div><div class="fb-body">${ansText}</div></div>
+        <button class="btn-next" id="btn-trace-done">この問題に進む</button>`;
+      document.getElementById('btn-trace-done').addEventListener('click', onDone);
+    });
   }
 
   function renderLessonExplain(key, onNext){
@@ -910,8 +1144,11 @@
     const seen = await seenTechniques();
     let lessonIdx = -1, lessonKey = null;
     for(let i=0;i<queue.length;i++){
-      const k = queue[i].technique && queue[i].technique.key;
-      if(k && !seen.includes(k)){ lessonIdx = i; lessonKey = k; break; }
+      const candidates = [];
+      if(queue[i].introKey) candidates.push(queue[i].introKey);
+      if(queue[i].technique && queue[i].technique.key) candidates.push(queue[i].technique.key);
+      const hit = candidates.find(k=>!seen.includes(k));
+      if(hit){ lessonIdx = i; lessonKey = hit; break; }
     }
     S.session = {
       queue,
@@ -940,11 +1177,14 @@
   function renderProblem(){
     if(S.session.idx === S.session.lessonIdx && !S.session.lessonDone){
       const key = S.session.lessonKey;
+      const isIntro = INTRO_KEYS.has(key);
       document.getElementById('session-progress-text').textContent = `講義`;
       document.getElementById('session-progress-bar').style.width = `${Math.round((S.session.idx)/S.session.queue.length*100)}%`;
       document.getElementById('problem-type-label').textContent = '';
-      renderLessonExplain(key, ()=>{
-        renderLessonTrace(key, async ()=>{
+      const explainFn = isIntro ? renderIntroExplain : renderLessonExplain;
+      const traceFn = isIntro ? renderIntroTrace : renderLessonTrace;
+      explainFn(key, ()=>{
+        traceFn(key, async ()=>{
           S.session.lessonDone = true;
           await markTechniqueSeen(key);
           renderProblem();
