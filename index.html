@@ -91,6 +91,7 @@
     margin-bottom: 20px;
   }
   .tree-wrap svg{ width:100%; height:auto; display:block; }
+  .tree-heading{ font-size:12.5px; color: var(--ink-soft); margin-bottom:8px; }
   .tree-caption{ display:flex; justify-content:space-between; align-items:baseline; margin-top:4px; }
   .tree-caption .total{ font-size:13px; color:var(--ink-soft); }
   .tree-caption .total b{ font-size:16px; color:var(--ink); font-weight:600; }
@@ -335,6 +336,7 @@
     </div>
 
     <div class="tree-wrap">
+      <div class="tree-heading">解いた問題の数だけ、この木が育ちます</div>
       <svg id="tree-svg" viewBox="0 0 200 170"></svg>
       <div class="tree-caption">
         <div class="total">これまでに <b class="num" id="total-count">0</b> 問</div>
@@ -1107,13 +1109,7 @@
     const depth = 2 + stage;
     branch(100,165,0, 24 + stage*3, depth);
     const ground = `<line x1="20" y1="165" x2="180" y2="165" stroke="var(--line)" stroke-width="1"/>`;
-    const seedlings = todayCount>0
-      ? Array.from({length: Math.min(todayCount,10)}, (_,i)=>{
-          const x = 30 + i*15;
-          return `<circle cx="${x}" cy="163" r="2.3" fill="var(--red)"/>`;
-        }).join('')
-      : '';
-    return `<svg-inner>${ground}${els.join('')}${seedlings}</svg-inner>`.replace(/<\/?svg-inner>/g,'');
+    return `<svg-inner>${ground}${els.join('')}</svg-inner>`.replace(/<\/?svg-inner>/g,'');
   }
 
   /* ================= rendering: home ================= */
@@ -1428,6 +1424,9 @@
     b.addEventListener('click', ()=>showScreen(b.dataset.nav));
   });
   document.getElementById('btn-start').addEventListener('click', startSession);
+  document.querySelectorAll('[data-nav]').forEach(b=>{
+    if(!b.closest('header.top')) b.addEventListener('click', ()=>showScreen(b.dataset.nav));
+  });
   document.getElementById('btn-result-home').addEventListener('click', async ()=>{
     S.dailyToday = (await stGet('daily:'+todayStr())) || defaultDaily();
     showScreen('home');
