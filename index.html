@@ -215,6 +215,9 @@
   .feedback-card.near .fb-title{ color:#8a6a24; }
   .feedback-card.no .fb-title{ color: var(--red); }
   .feedback-card .fb-body{ font-size:13.5px; color: var(--ink-soft); line-height:1.6; }
+  .gradient-bar{ height:8px; background: var(--paper); border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+  .gradient-fill{ height:100%; transition: width .4s ease, background .4s ease; }
+  .gradient-label{ font-size:11px; color: var(--ink-soft); margin-top:4px; }
   .btn-next{
     background: var(--navy); color:#fff; border:none; border-radius: var(--radius);
     padding: 14px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; width:100%;
@@ -276,6 +279,14 @@
     background: var(--card); border:1px dashed var(--line); border-radius: var(--radius);
     padding: 10px 12px; font-size:13px; color: var(--ink-soft); margin-bottom:14px;
   }
+  .scratchpad-wrap{ margin-bottom:14px; }
+  .scratchpad-label{ display:block; font-size:12px; color:var(--ink-soft); margin-bottom:4px; }
+  .scratchpad{
+    width:100%; font-family:'Space Grotesk', monospace; font-size:15px;
+    padding:8px 10px; border:1.5px dashed var(--line); border-radius: var(--radius);
+    background:#fff; color: var(--ink); resize:vertical;
+  }
+  .scratchpad:focus{ outline:2px solid var(--navy); outline-offset:1px; border-style:solid; }
 
   /* ---------- RESULT ---------- */
   .result-tier{
@@ -517,6 +528,7 @@
   const S = {
     meta: null,           // {totalProblems, totalCorrect, totalTimeMs, firstDate}
     skills: {},           // type -> {level, streakCorrect, streakWrong, log:[{correct,ms}]}
+    mastery: {},          // introKey -> {streak, mastered, masteredAt, lastTestedAt}
     dailyToday: null,
     dailyYesterday: null,
     session: null,
@@ -525,14 +537,35 @@
 
   function defaultSkill(){ return {level:1, streakCorrect:0, streakWrong:0, log:[]}; }
   function defaultDaily(){ return {count:0, correct:0, timeMsSum:0, byType:{}}; }
+  const MASTERY_STREAK_TARGET = 5;
+  const RETENTION_GAP_DAYS = 3;
+  const MASTERY_LABEL = {
+    'biz-discount':'割引の計算', 'biz-tax':'消費税の計算',
+    'add-2digit':'2桁の足し算', 'sub-2digit':'2桁の引き算', 'mul-2digit':'2桁のかけ算',
+    'div-basic':'割り算', 'est-basic':'概算', 'qty-basic':'瞬間数量認識'
+  };
 
   async function loadAll(){
     S.meta = (await stGet('meta')) || {totalProblems:0, totalCorrect:0, totalTimeMs:0, firstDate: todayStr()};
     for (const t of TYPES){
       S.skills[t] = (await stGet('skill:'+t)) || defaultSkill();
     }
+    S.mastery = (await stGet('mastery')) || {};
     S.dailyToday = (await stGet('daily:'+todayStr())) || defaultDaily();
     S.dailyYesterday = await stGet('daily:'+todayStr(-1));
+  }
+
+  function daysBetween(dateStr1, dateStr2){
+    return Math.floor((new Date(dateStr2) - new Date(dateStr1)) / 86400000);
+  }
+  function retentionDueKeys(){
+    return Object.keys(S.mastery).filter(k=>{
+      const m = S.mastery[k];
+      if(!m || !m.mastered) return false;
+      const ref = m.lastTestedAt || m.masteredAt;
+      if(!ref) return false;
+      return daysBetween(ref, todayStr()) >= RETENTION_GAP_DAYS;
+    });
   }
 
   function skillAvg(log){
@@ -597,7 +630,9 @@
         const uq = Number(v.q), ur = Number(v.r);
         const correctFlag = uq===q && ur===r;
         const near = !correctFlag && uq===q;
-        return {correct: correctFlag, near, correctText: `商 ${q}　あまり ${r}`};
+        const qDiff = Math.abs(uq-q);
+        const diff = qDiff===0 ? Math.abs(ur-r) : qDiff*3 + Math.abs(ur-r);
+        return {correct: correctFlag, near, correctText: `商 ${q}　あまり ${r}`, diff, scale: 3};
       }
     };
   }
@@ -627,7 +662,7 @@
         const diff = Math.abs(u-correct);
         const correctFlag = diff<=tolerance;
         const near = !correctFlag && diff<=tolerance*2;
-        return {correct: correctFlag, near, correctText: `目安: ${correct}`};
+        return {correct: correctFlag, near, correctText: `目安: ${correct}`, diff, scale: tolerance};
       }
     };
   }
@@ -647,13 +682,24 @@
       evaluate: (v)=>{
         const u = Number(v.ans);
         const correctFlag = u===n;
-        const near = !correctFlag && Math.abs(u-n)===1;
-        return {correct: correctFlag, near, correctText: String(n)};
+        const diff = Math.abs(u-n);
+        const near = !correctFlag && diff===1;
+        return {correct: correctFlag, near, correctText: String(n), diff, scale: 1};
       }
     };
   }
-  function genBiz(level){
+  function genBiz(level, forcedSub){
     let amount, sub, rate;
+    const dm = S.mastery && S.mastery['biz-discount'];
+    const tm = S.mastery && S.mastery['biz-tax'];
+    function pickSub(options){
+      if(forcedSub) return forcedSub;
+      if(options.length===1) return options[0];
+      const dMastered = dm && dm.mastered, tMastered = tm && tm.mastered;
+      if(dMastered && !tMastered) return 'tax';
+      if(!dMastered && tMastered) return 'discount';
+      return choice(options);
+    }
     if(level<=1){
       amount = randInt(2,9)*10;                 // 20〜90（きりのよい数）
       sub = 'discount';
@@ -664,15 +710,15 @@
       rate = choice([10,20,50]);
     } else if(level===3){
       amount = randInt(100,999);                 // 端数のある3桁
-      sub = choice(['discount','tax']);
+      sub = pickSub(['discount','tax']);
       rate = sub==='discount' ? choice([10,20,30]) : 10;
     } else if(level===4){
       amount = randInt(10,999)*10;                // 100〜9990（きりのよい数）
-      sub = choice(['discount','tax']);
+      sub = pickSub(['discount','tax']);
       rate = sub==='discount' ? choice([10,20,30,40]) : choice([8,10]);
     } else {
       amount = randInt(1000,9999);                // 端数のある4桁
-      sub = choice(['discount','tax']);
+      sub = pickSub(['discount','tax']);
       rate = sub==='discount' ? choice([10,20,30,40,50]) : choice([8,10]);
     }
     let correct, text;
@@ -693,8 +739,9 @@
         const u = Number(v.ans);
         const diff = Math.abs(u-correct);
         const correctFlag = diff===0;
-        const near = !correctFlag && diff<=1;
-        return {correct: correctFlag, near, correctText: `${correct}円`};
+        const scale = Math.max(3, Math.round(correct*0.03));
+        const near = !correctFlag && diff<=scale;
+        return {correct: correctFlag, near, correctText: `${correct}円`, diff, scale};
       }
     };
   }
@@ -710,7 +757,7 @@
         const diff = Math.abs(u-correct);
         const correctFlag = u===correct;
         const near = !correctFlag && diff<=tolerance;
-        return {correct: correctFlag, near, correctText: String(correct)};
+        return {correct: correctFlag, near, correctText: String(correct), diff, scale: tolerance};
       }
     };
   }
@@ -1135,9 +1182,31 @@
   /* ================= session flow ================= */
   let sessionTimerHandle = null;
 
+  function forceProblemForMasteryKey(key){
+    if(key==='biz-discount') return genBiz(Math.max(3,S.skills.biz.level), 'discount');
+    if(key==='biz-tax') return genBiz(Math.max(3,S.skills.biz.level), 'tax');
+    if(key==='add-2digit') return genAdd(Math.max(2,S.skills.add.level));
+    if(key==='sub-2digit') return genSub(Math.max(2,S.skills.sub.level));
+    if(key==='mul-2digit') return genMul(Math.max(2,S.skills.mul.level));
+    if(key==='div-basic') return genDiv(S.skills.div.level);
+    if(key==='est-basic') return genEst(S.skills.est.level);
+    if(key==='qty-basic') return genQty(S.skills.qty.level);
+    return null;
+  }
+
   async function startSession(){
     const queue = buildSessionQueue();
     const seen = await seenTechniques();
+
+    const due = retentionDueKeys();
+    if(due.length>0){
+      const forced = forceProblemForMasteryKey(due[0]);
+      if(forced){
+        forced._retentionCheck = true;
+        queue[Math.min(1, queue.length-1)] = forced;
+      }
+    }
+
     let lessonIdx = -1, lessonKey = null;
     for(let i=0;i<queue.length;i++){
       const candidates = [];
@@ -1207,14 +1276,11 @@
           <div class="prompt-sub">${q.promptSub}</div>
           <div class="dot-field" id="dot-field"></div>
         </div>`;
-      const field = document.getElementById('dot-field');
-      field.innerHTML = q.dots.map(d=>`<div class="dot" style="left:${d.x}%; top:${d.y}%"></div>`).join('');
       inputArea.innerHTML = '';
-      setTimeout(()=>{
-        field.innerHTML = '';
+      showQtyDots(q, ()=>{
         renderInputForm(q, inputArea);
         q._startTime = performance.now();
-      }, q.showMs);
+      });
     } else {
       promptArea.innerHTML = `
         <div class="prompt-card">
@@ -1226,10 +1292,25 @@
     }
   }
 
+  function showQtyDots(q, onDone){
+    const field = document.getElementById('dot-field');
+    field.innerHTML = q.dots.map(d=>`<div class="dot" style="left:${d.x}%; top:${d.y}%"></div>`).join('');
+    setTimeout(()=>{
+      field.innerHTML = '';
+      onDone();
+    }, q.showMs);
+  }
+
   function renderInputForm(q, container){
     const hint = q.technique ? hintTextFor(q) : '';
+    const showScratchpad = !!q.introKey && q.type!=='qty';
     container.innerHTML = `
       ${hint ? `<button class="hint-toggle" id="btn-hint">💡 ヒントを見る</button><div class="hint-box" id="hint-box" style="display:none;">${hint}</div>` : ''}
+      ${showScratchpad ? `
+        <div class="scratchpad-wrap">
+          <label class="scratchpad-label">けいさんメモ（採点されません。自由に使ってください）</label>
+          <textarea class="scratchpad" id="scratchpad" rows="2" placeholder="例）2000×20÷100=400"></textarea>
+        </div>` : ''}
       <div class="field-row">
         ${q.fields.map(f=>`
           <div class="field-group">
@@ -1256,6 +1337,17 @@
     document.getElementById('btn-quit').addEventListener('click', ()=>endSession(true));
   }
 
+  const MAX_ATTEMPTS = 3;
+  function scoreFromDiff(diff, scale){
+    if(diff<=0) return 100;
+    if(!scale || scale<=0) scale=1;
+    return Math.max(0, Math.min(99, Math.round(100 - (diff/scale)*50)));
+  }
+  function closenessColor(score){
+    const hue = Math.round((score/100)*130); // 0=red, 130=moss-green
+    return `hsl(${hue}, 42%, 40%)`;
+  }
+
   function submitAnswer(q, container){
     const values = {};
     let hasEmpty = false;
@@ -1267,15 +1359,40 @@
 
     const elapsedMs = performance.now() - q._startTime;
     const result = q.evaluate(values);
+    result.score = scoreFromDiff(result.diff||0, result.scale||1);
 
-    const skill = S.skills[q.type];
-    const before = skillAvg(skill.log);
+    q._attempts = (q._attempts||0) + 1;
 
-    updateSkillAfterAnswer(q.type, result.correct, elapsedMs);
-    updateDailyAfterAnswer(q.type, result.correct, elapsedMs);
-    S.session.results.push({type:q.type, correct:result.correct, ms:elapsedMs});
+    if(q._attempts===1){
+      const skill = S.skills[q.type];
+      const before = skillAvg(skill.log);
+      updateSkillAfterAnswer(q.type, result.correct, elapsedMs);
+      updateDailyAfterAnswer(q.type, result.correct, elapsedMs);
+      S.session.results.push({type:q.type, correct:result.correct, ms:elapsedMs});
+      q._firstBefore = before;
+      if(q.introKey) updateMasteryAfterAnswer(q, result.correct);
+    }
 
-    renderFeedback(result, elapsedMs, before);
+    renderFeedback(q, result, elapsedMs, container);
+  }
+
+  function updateMasteryAfterAnswer(q, correct){
+    const key = q.introKey;
+    const m = S.mastery[key] || {streak:0, mastered:false, masteredAt:null, lastTestedAt:null};
+    if(q._retentionCheck){
+      m.lastTestedAt = todayStr();
+      if(correct){ q._retentionResult = 'pass'; }
+      else { m.mastered = false; m.streak = Math.max(0, MASTERY_STREAK_TARGET-3); q._retentionResult = 'fail'; }
+      S.mastery[key] = m;
+      return;
+    }
+    if(correct){ m.streak++; } else { m.streak = 0; }
+    if(!m.mastered && m.streak>=MASTERY_STREAK_TARGET){
+      m.mastered = true;
+      m.masteredAt = todayStr();
+      q._justMastered = true;
+    }
+    S.mastery[key] = m;
   }
 
   function updateSkillAfterAnswer(type, correct, ms){
@@ -1296,35 +1413,108 @@
 
   const PRAISE_VARIANTS = ['正解です。','その調子です。','正解。良いペースです。'];
 
-  function renderFeedback(result, elapsedMs, before){
-    let cls, title, body;
+  function gradientBarHTML(score){
+    return `
+      <div class="gradient-bar"><div class="gradient-fill" style="width:${score}%; background:${closenessColor(score)}"></div></div>
+      <div class="gradient-label">正解までの近さ：${score}点</div>`;
+  }
+
+  function renderFeedback(q, result, elapsedMs, container){
+    const canRetry = !result.correct && q._attempts < MAX_ATTEMPTS;
+
     if(result.correct){
-      cls='ok'; title='正解';
-      if(before.avgMs && S.session.results.length>2 && elapsedMs < before.avgMs){
-        const diff = ((before.avgMs - elapsedMs)/1000).toFixed(2);
+      let body, title='正解';
+      if(q._retentionCheck){
+        title = '身についています';
+        body = `${MASTERY_LABEL[q.introKey]||''}、しばらく間を置いても自転車のようにすぐ使えましたね。`;
+      } else if(q._justMastered){
+        title = '習得しました';
+        body = `${MASTERY_LABEL[q.introKey]||''}が安定して解けるようになりました。数日後、忘れていないか一度だけ確認します。`;
+      } else if(q._attempts>1){
+        body = `${q._attempts}回目で正解できました。近づいていく過程も力になります。`;
+      } else if(q._firstBefore && q._firstBefore.avgMs && S.session.results.length>2 && elapsedMs < q._firstBefore.avgMs){
+        const diff = ((q._firstBefore.avgMs - elapsedMs)/1000).toFixed(2);
         body = `これまでの平均より ${diff}秒速く答えられました。`;
       } else {
         body = choice(PRAISE_VARIANTS);
       }
-    } else if(result.near){
-      cls='near'; title='惜しい';
-      body = `考え方はかなり近いです。正解は ${result.correctText} でした。`;
-    } else {
-      cls='no'; title='不正解';
-      body = `正解は ${result.correctText} でした。`;
+      document.getElementById('feedback-area').innerHTML = `
+        <div class="feedback-card ok"><div class="fb-title">${title}</div><div class="fb-body">${body}</div></div>
+        <button class="btn-next" id="btn-next">次へ</button>`;
+      document.getElementById('input-area').innerHTML = '';
+      document.getElementById('btn-next').addEventListener('click', ()=>advanceSession());
+      return;
     }
+
+    if(q._retentionCheck && !result.correct){
+      document.getElementById('feedback-area').innerHTML = `
+        <div class="feedback-card near">
+          <div class="fb-title">少し忘れかけています</div>
+          <div class="fb-body">${MASTERY_LABEL[q.introKey]||''}の感覚が薄れているようです。正解は ${result.correctText} でした。もう一度、集中的に練習しましょう。</div>
+        </div>
+        <button class="btn-next" id="btn-next">次へ</button>`;
+      document.getElementById('input-area').innerHTML = '';
+      document.getElementById('btn-next').addEventListener('click', ()=>advanceSession());
+      return;
+    }
+
+    if(canRetry){
+      let compareLine = '';
+      if(q._lastScore!==undefined){
+        if(result.score > q._lastScore) compareLine = `前回(${q._lastScore}点)より ${result.score-q._lastScore}点、正解に近づきました。`;
+        else if(result.score < q._lastScore) compareLine = `前回(${q._lastScore}点)より少し離れました。落ち着いてもう一度考えてみましょう。`;
+        else compareLine = `前回と同じ近さです。`;
+      } else {
+        compareLine = result.score>=50 ? `かなり近い値です。もう一度、見直してみましょう。` : `まだ距離がありますが、考え方を見直せば近づけます。`;
+      }
+      q._lastScore = result.score;
+      document.getElementById('feedback-area').innerHTML = `
+        <div class="feedback-card near">
+          <div class="fb-title">もう少しです（${q._attempts}/${MAX_ATTEMPTS}回目）</div>
+          ${gradientBarHTML(result.score)}
+          <div class="fb-body" style="margin-top:8px;">${compareLine}</div>
+        </div>
+        <div class="answer-actions">
+          <button class="btn-submit" id="btn-retry">もう一度挑戦する</button>
+          <button class="btn-quit" id="btn-reveal">答えを見て次へ</button>
+        </div>`;
+      document.getElementById('input-area').innerHTML = '';
+      document.getElementById('btn-retry').addEventListener('click', ()=>{
+        document.getElementById('feedback-area').innerHTML = '';
+        if(q.isQty){
+          document.getElementById('input-area').innerHTML = '';
+          showQtyDots(q, ()=>{
+            renderInputForm(q, document.getElementById('input-area'));
+            q._startTime = performance.now();
+          });
+        } else {
+          renderInputForm(q, document.getElementById('input-area'));
+          q._startTime = performance.now();
+        }
+      });
+      document.getElementById('btn-reveal').addEventListener('click', ()=>renderFinalReveal(q, result));
+      return;
+    }
+
+    renderFinalReveal(q, result);
+  }
+
+  function renderFinalReveal(q, result){
     document.getElementById('feedback-area').innerHTML = `
-      <div class="feedback-card ${cls}">
-        <div class="fb-title">${title}</div>
-        <div class="fb-body">${body}</div>
+      <div class="feedback-card no">
+        <div class="fb-title">${q._attempts>1 ? `惜しいところまで来ていました` : '不正解'}</div>
+        ${gradientBarHTML(result.score)}
+        <div class="fb-body" style="margin-top:8px;">正解は ${result.correctText} でした。</div>
       </div>
       <button class="btn-next" id="btn-next">次へ</button>`;
     document.getElementById('input-area').innerHTML = '';
-    document.getElementById('btn-next').addEventListener('click', ()=>{
-      S.session.idx++;
-      if(S.session.idx >= S.session.queue.length){ endSession(false); }
-      else { renderProblem(); }
-    });
+    document.getElementById('btn-next').addEventListener('click', ()=>advanceSession());
+  }
+
+  function advanceSession(){
+    S.session.idx++;
+    if(S.session.idx >= S.session.queue.length){ endSession(false); }
+    else { renderProblem(); }
   }
 
   async function endSession(early){
@@ -1340,6 +1530,7 @@
     S.meta.totalTimeMs += results.reduce((s,r)=>s+r.ms,0);
     await stSet('meta', S.meta);
     await stSet('daily:'+todayStr(), S.dailyToday);
+    await stSet('mastery', S.mastery);
     for(const t of TYPES){ await stSet('skill:'+t, S.skills[t]); }
 
     // tier message
@@ -1406,6 +1597,30 @@
       }
       el.appendChild(row);
     });
+
+    // 習得状況（自転車テスト）
+    const masteryKeys = Object.keys(S.mastery).filter(k=>S.mastery[k] && (S.mastery[k].mastered || S.mastery[k].streak>0));
+    const masterySection = document.createElement('div');
+    masterySection.style.marginTop = '26px';
+    if(masteryKeys.length===0){
+      masterySection.innerHTML = `<div class="skill-head" style="margin-bottom:6px;"><span class="sname">習得状況</span></div><div class="skill-empty">まだ集中的に練習した項目がありません。</div>`;
+    } else {
+      const rows = masteryKeys.map(k=>{
+        const m = S.mastery[k];
+        const label = MASTERY_LABEL[k] || k;
+        if(m.mastered){
+          const ref = m.lastTestedAt || m.masteredAt;
+          const days = daysBetween(ref, todayStr());
+          const untilCheck = Math.max(0, RETENTION_GAP_DAYS - days);
+          const statusText = untilCheck===0 ? '次回のセッションで確認予定' : `あと${untilCheck}日で確認`;
+          return `<div class="compare-row"><span class="ctype">${label}　習得済み</span><span class="cval up">${statusText}</span></div>`;
+        } else {
+          return `<div class="compare-row"><span class="ctype">${label}</span><span class="cval">${m.streak}/${MASTERY_STREAK_TARGET}連続正解</span></div>`;
+        }
+      }).join('');
+      masterySection.innerHTML = `<div class="skill-head" style="margin-bottom:6px;"><span class="sname">習得状況（自転車テスト）</span></div>${rows}`;
+    }
+    el.appendChild(masterySection);
   }
 
   /* ================= navigation ================= */
